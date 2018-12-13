@@ -8,39 +8,59 @@ type oper2 =
   | Plus
   | Multi
   | Div
-  
-type oper3 =
+  | Eg
   | Et
   | Ou
 
-type oper4 = 
+type oper3 = 
   | Non
+
+type oper4 =
+  | IfThenElse
 
 type expr = 
   | Int of int
-  | Op2 of oper2 * expr * expr
-
-type expr_bool =
   | Bool of bool
-  | OpBool1 of oper3 * expr_bool * expr_bool
-  | OpBool2 of oper4 * expr_bool
+  | Op of oper2 * expr * expr
+  | OpNon of oper3 * expr
+  | OpIf of oper4 * expr * expr * expr
 
-
+type res =
+  | Rint of int
+  | Rbool of bool
 
 let rec eval e =
   match e with
-  | Int n -> n
-  | Op2 (Moins, x, y) -> eval x - eval y
-  | Op2 (Plus, x, y) -> eval x + eval y
-  | Op2 (Multi, x, y) -> eval x * eval y
-  | Op2 (Div, x, y) -> eval x / eval y
-
-let rec eval_bool e =
-  match e with
-  | Bool b -> b
-  | OpBool1 (Et, x, y) -> eval_bool x && eval_bool y
-  | OpBool1 (Ou, x, y) -> eval_bool x || eval_bool y
-  | OpBool2 (Non, x) ->  not (eval_bool x)
+  | Int n -> Rint(n)
+  | Bool b -> Rbool(b)
+  | Op (Moins, x, y) -> (match (eval x,eval y) with
+                        |(Rint x, Rint y) -> Rint (x-y)
+                        |_ -> failwith "Soustraction entre entiers seulement")                
+  | Op (Plus, x, y) -> (match (eval x,eval y) with
+                        |(Rint x, Rint y) -> Rint (x+y)
+                        |_ -> failwith "Addition entre entiers seulement")
+  | Op (Multi, x, y) -> (match (eval x,eval y) with
+                        |(Rint x, Rint y) -> Rint (x*y)
+                        |_ -> failwith "Multiplication entre entiers seulement")    
+  | Op (Div, x, y) -> (match (eval x,eval y) with
+                        |(Rint x, Rint y) -> if (y != 0) then Rint (x/y) else failwith "Div par 0"
+                        |_ -> failwith "Division entre entiers seulement")    
+  | Op (Et, x, y) -> (match (eval x,eval y) with
+                        |(Rbool x, Rbool y) -> Rbool (x && y)
+                        |_ -> failwith "Et entre booleens seulement")
+  | Op (Ou, x, y) -> (match (eval x,eval y) with
+                        |(Rbool x, Rbool y) -> Rbool (x || y)
+                        |_ -> failwith "Ou entre booleens seulement")
+  | Op (Eg,x,y) -> (match (eval x, eval y) with
+                      |(Rint x, Rint y) -> Rbool (x = y)
+                      |(Rbool x, Rbool y) -> Rbool (x = y)
+                      |_ -> failwith "Eg entre booleens ou entiers seulement")
+  | OpNon (Non, x) ->  (match (eval x) with
+                    |(Rbool x) -> Rbool (not x)
+                    |_ -> failwith "Non entre booleens seulement")
+  | OpIf (IfThenElse,b,x,y) -> (match (eval b) with
+                                |Rbool b -> if b then eval x else eval y
+                                |_ -> failwith "Probleme dans le If")
 
 (* Impression avec toutes les parenthÃ¨ses explicites *)
 let string_oper2 o =
@@ -49,39 +69,37 @@ let string_oper2 o =
   | Plus -> "+"
   | Multi -> "*"
   | Div -> "/"
-
-let string_oper3 o =
-  match o with
+  | Eg -> "="
   | Et -> "&&"
   | Ou -> "||"
 
-let string_oper4 o =
+let string_oper3 o =
   match o with
-  | Non -> " not "
+  | Non -> "not "
 
 let rec print_expr e =
   match e with
   | Int n -> print_int n
-  | Op2 (o, x, y) ->
+  | Bool b -> print_string (string_of_bool b)
+  | Op (o, x, y) ->
      (print_char '(';
       print_expr x;
       print_string (string_oper2 o);
       print_expr y;
       print_char ')')
-
-let rec print_expr_bool e =
-  match e with
-  |Bool b -> print_string (string_of_bool b)
-  |OpBool1 (b,x,y) ->
-   (print_char '(';
-      print_expr_bool x;
+  | OpNon (b,x) ->
+     (print_char '(';
       print_string (string_oper3 b);
-      print_expr_bool y;
+      print_expr x;
       print_char ')')
-  |OpBool2 (b,x) ->
+  | OpIf (o,b,x,y) ->
     (print_char '(';
-      print_string (string_oper4 b);
-      print_expr_bool x;
+      print_string ("If");
+      print_expr b;
+      print_string ("Then");
+      print_expr x;
+      print_string ("Else");
+      print_expr y;
       print_char ')')
 
     
@@ -107,15 +125,20 @@ let _ = horner 0 (Stream.of_string "45089")
 type token = 
   | Tent of int
   | Tbool of bool
+  | Tmoins
+  | Tplus
+  | Tmulti
+  | Tdiv        
   | Tet
   | Tou
   | Tnon
-  | Tmoins
-  | Tplus
+  | Teg
+  | Tif
+  | Tthen
+  | Telse
   | Touvert
   | Tferme
-  | Tmulti
-  | Tdiv
+
 
 (* 
 Pour passer d'un flot de caractÃ¨res Ã  un flot de lexÃ¨mes,
@@ -146,6 +169,10 @@ let rec next_token = parser
   | [< '  ')' >] -> Some(Tferme)
   | [< '  '*' >] -> Some(Tmulti)
   | [< '  '/' >] -> Some(Tdiv)
+  | [< '  '=' >] -> Some(Teg)
+  | [<''i';''f'>] -> Some(Tif)
+  | [<''t';''h';''e';''n'>] -> Some(Tthen)
+  | [<''e';''l';''s';''e'>] -> Some(Telse)
   | [< >] -> None
 
 (* tests *)
@@ -196,52 +223,49 @@ let ltk1 = list_of_stream (lex (Stream.of_string "356 - 10 - 4"))
 *)
 
 let rec p_expr = parser
-  | [< t = p_terme; e = p_s_add t >] -> e
-and p_s_add a = parser 
-  | [< ' Tmoins; t = p_terme; e = p_s_add (Op2(Moins,a,t)) >] -> e
-  | [< ' Tplus; t = p_terme; e = p_s_add (Op2(Plus,a,t)) >] -> e
-  | [< >] -> a
-
-and p_terme = parser
-  | [<t = p_facteur; e=p_s_mul t>] -> e
-           
-and p_s_mul a = parser
-  | [< ' Tmulti; t = p_terme; e = p_s_mul (Op2(Multi,a,t)) >] -> e
-  | [< ' Tdiv; t = p_terme; e = p_s_mul (Op2(Div,a,t)) >] -> e                                                                                                                  
-  | [< >] -> a
-           
-and p_facteur = parser 
-  | [< ' Tent(n)>] -> Int(n)
-  | [< ' Touvert; t = p_expr;' Tferme>] -> t
-                                         
-let rec p_expr_bool = parser
-                | [< t = p_conjonction; e = p_s_disjonctions t >] -> e
-
+  |[<'Tif; b=p_expr; 'Tthen; x=p_expr; 'Telse; y=p_expr>] -> OpIf(IfThenElse,b,x,y)
+  | [< t = p_conjonction; e = p_s_disjonctions t >] -> e
 and p_s_disjonctions a = parser
-                       | [< ' Tou; t = p_conjonction; e = p_s_disjonctions (OpBool1(Ou,a,t)) >] -> e
-                       | [< >] -> a
-                                
+  | [< ' Tou; t = p_conjonction; e = p_s_disjonctions (Op(Ou,a,t)) >] -> e
+  | [< >] -> a
 and p_conjonction = parser
-                  | [<  t=p_litteral; e= p_s_conjonctions t >] -> e
-                                                                 
+  | [<  t=p_litteral; e= p_s_conjonctions t >] -> e
 and p_s_conjonctions a = parser
-                       | [< 'Tet; t = p_litteral; e = p_s_conjonctions (OpBool1(Et,a,t)) >] -> e
-                       | [< >] -> a
-                                
+  | [< 'Tet; t = p_litteral; e = p_s_conjonctions (Op(Et,a,t)) >] -> e
+  | [< >] -> a
 and p_litteral = parser
-                 | [<' Tnon; e = p_litteral>] -> OpBool2(Non,e)
-                 | [<' Tbool(b)>] -> Bool(b)
-                 | [<' Touvert;e = p_expr_bool;' Tferme>] -> e
+               | [<' Tnon; e = p_litteral>] -> OpNon(Non,e)
+               | [< t = p_expr_c; e = p_cmp t >] -> e
+and p_cmp a = parser
+            | [< ' Teg; t = p_expr_c >] -> Op(Eg,t,a)
+            | [< >] -> a
+and p_expr_c = parser
+  | [< t = p_terme; e = p_s_add t >] -> e
+and p_s_add a = parser
+  | [< ' Tmoins; t = p_terme; e = p_s_add (Op(Moins,a,t)) >] -> e
+  | [< ' Tplus; t = p_terme; e = p_s_add (Op(Plus,a,t)) >] -> e
+  | [< >] -> a
+and p_terme = parser
+  | [<t = p_facteur; e=p_s_mul t>] -> e          
+and p_s_mul a = parser
+  | [< ' Tmulti; t = p_facteur; e = p_s_mul (Op(Multi,a,t)) >] -> e
+  | [< ' Tdiv; t = p_facteur; e = p_s_mul (Op(Div,a,t)) >] -> e         
+  | [< >] -> a
+and p_facteur = parser 
+              | [< ' Tent(n)>] -> Int(n)
+              | [<' Tbool(b)>] -> Bool(b)
+              | [<' Touvert;e = p_expr;' Tferme>] -> e
+
+
                                                           
   
                                                                    
   
 
 let ast s = p_expr (lex (Stream.of_string s))
-let ast_bool s = p_expr_bool (lex (Stream.of_string s))
-          
 
-let e1 = ast_bool " (faux && non faux) || (faux || non vrai)"     
-let x = eval_bool e1
-let y = print_expr_bool e1
+let e1 = ast "if(5=5)then(if(vrai)then(4/2)else(4*2))else(vrai)"     
+let x = eval e1
+let y = print_expr e1
           
+ 
