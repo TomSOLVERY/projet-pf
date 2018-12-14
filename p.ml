@@ -2,7 +2,6 @@
 (* #load "camlp4/camlp4o.cma"  *)
 #use "topfind";;
 #camlp4o;;
-
 type oper2 = 
   | Moins
   | Plus
@@ -76,8 +75,9 @@ let rec eval e env =
   | OpNon (Non, x) ->  (match (eval x env) with
                     |(Rbool x) -> Rbool (not x)
                     |_ -> failwith "Non entre booleens seulement")
-  | OpIf (IfThenElse,b,x,y) -> (match (eval b env) with
-                                |Rbool b -> if b then eval x env else eval y env
+  | OpIf (IfThenElse,b,x,y) -> (match (eval b env, eval x env, eval y env) with
+                                |(Rbool b, Rbool x, Rbool y) -> if b then  Rbool x  else Rbool y 
+                                |(Rbool b, Rint x, Rint y) -> if b then Rint x  else Rint y 
                                 |_ -> failwith "Probleme dans le If")
   | OpSD (SoitDans,id,exp,expIn) -> let x = (id, (eval exp env)) in eval expIn (x::env)
 
@@ -303,10 +303,12 @@ and p_facteur = parser
 
 let ast s = p_expr (lex (Stream.of_string s))
 
+
+let e = ast "if vrai then 5 else faux"
 let e1 = ast "if(5=5)then(if(vrai)then(4/2)else(4*2))else(vrai)"
-let e2 = ast "soit x = 5 dans x + (soit x = 2 dans x) - 3"
+let e2 = ast "soit x = 5 dans x + (soit x = 2 dans x * (soit x = 3 dans x)) - 3"
+let e2l = ast "soit y = 2 dans (soit x = y + 5 dans (soit y = 1 dans x))"
 let e3 = ast "soit x = (if (vrai) then 2 else 1000) dans (soit y = 3 dans (x + y))"
-let x = eval e3 []
+let x = eval e []
 let y = print_expr e3
           
- 
