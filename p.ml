@@ -34,11 +34,15 @@ type expr =
           
 
 
-type res =
+(*type res =
   | Rint of int
   | Rbool of bool
+ *)
+type res_type =
+  |Integer
+  |Boolean 
 
-type env = (ident*res) list
+type env = (ident*expr) list
 
 let rec get id env =
   match env with
@@ -47,39 +51,46 @@ let rec get id env =
 
 let rec eval e env =
   match e with
-  | Int n -> Rint(n)
-  | Bool b -> Rbool(b)
+  | Int n -> Int n
+  | Bool b -> Bool b
   | Ident x -> get x env
   | Op (Moins, x, y) -> (match (eval x env,eval y env) with
-                        |(Rint x, Rint y) -> Rint (x-y)
-                        |_ -> failwith "Soustraction entre entiers seulement")                
+                        | (Int x, Int y) -> Int (x-y)
+                        | _ -> failwith "Soustraction entre entiers seulement")                
   | Op (Plus, x, y) -> (match (eval x env,eval y env) with
-                        |(Rint x, Rint y) -> Rint (x+y)
-                        |_ -> failwith "Addition entre entiers seulement")
+                        | (Int x, Int y) -> Int (x+y)
+                        | _ -> failwith "Addition entre entiers seulement")
   | Op (Multi, x, y) -> (match (eval x env,eval y env) with
-                        |(Rint x, Rint y) -> Rint (x*y)
+                        |(Int x, Int y) -> Int (x*y)
                         |_ -> failwith "Multiplication entre entiers seulement")    
   | Op (Div, x, y) -> (match (eval x env,eval y env) with
-                        |(Rint x, Rint y) -> if (y != 0) then Rint (x/y) else failwith "Div par 0"
+                        |(Int x, Int y) -> if (y != 0) then Int (x/y) else failwith "Div par 0"
                         |_ -> failwith "Division entre entiers seulement")    
   | Op (Et, x, y) -> (match (eval x env,eval y env) with
-                        |(Rbool x, Rbool y) -> Rbool (x && y)
+                        |(Bool x, Bool y) -> Bool (x && y)
                         |_ -> failwith "Et entre booleens seulement")
   | Op (Ou, x, y) -> (match (eval x env,eval y env) with
-                        |(Rbool x, Rbool y) -> Rbool (x || y)
+                        |(Bool x, Bool y) -> Bool (x || y)
                         |_ -> failwith "Ou entre booleens seulement")
   | Op (Eg,x,y) -> (match (eval x env, eval y env) with
-                      |(Rint x, Rint y) -> Rbool (x = y)
-                      |(Rbool x, Rbool y) -> Rbool (x = y)
+                      |(Int x, Int y) -> Bool (x = y)
+                      |(Bool x, Bool y) -> Bool (x = y)
                       |_ -> failwith "Eg entre booleens ou entiers seulement")
   | OpNon (Non, x) ->  (match (eval x env) with
-                    |(Rbool x) -> Rbool (not x)
+                    |(Bool x) -> Bool (not x)
                     |_ -> failwith "Non entre booleens seulement")
   | OpIf (IfThenElse,b,x,y) -> (match (eval b env, eval x env, eval y env) with
-                                |(Rbool b, Rbool x, Rbool y) -> if b then  Rbool x  else Rbool y 
-                                |(Rbool b, Rint x, Rint y) -> if b then Rint x  else Rint y 
+                                |(Bool b, Bool x, Bool y) -> if b then  Bool x  else Bool y 
+                                |(Bool b, Int x, Int y) -> if b then Int x  else Int y 
                                 |_ -> failwith "Probleme dans le If")
   | OpSD (SoitDans,id,exp,expIn) -> let x = (id, (eval exp env)) in eval expIn (x::env)
+
+
+let rec eval_type e env =
+  let x = eval e env in match x with
+                        |Int(n) -> Integer
+                        |Bool(n) -> Boolean
+                        | _ -> failwith "Erreur dans l'evaluation"        
 
 (* Impression avec toutes les parenthÃ¨ses explicites *)
 let string_oper2 o =
@@ -305,10 +316,11 @@ let ast s = p_expr (lex (Stream.of_string s))
 
 
 let e = ast "if vrai then 5 else faux"
-let e1 = ast "if(5=5)then(if(vrai)then(4/2)else(4*2))else(vrai)"
+let e1 = ast "if(5=5)then(if(vrai)then(4/2)else(4*2))else(50)"
 let e2 = ast "soit x = 5 dans x + (soit x = 2 dans x * (soit x = 3 dans x)) - 3"
 let e2l = ast "soit y = 2 dans (soit x = y + 5 dans (soit y = 1 dans x))"
 let e3 = ast "soit x = (if (vrai) then 2 else 1000) dans (soit y = 3 dans (x + y))"
-let x = eval e []
+let t = eval_type e1 []
+let x = eval e1 []
 let y = print_expr e3
           
