@@ -162,7 +162,7 @@ let rec (parse_string : string -> char Stream.t -> string) = fun str ->
   parser
   |[<''a'..'z' | 'A'..'Z' | '0'..'9' as x; s>] -> String.make 1 x ^ (parse_string str s)
   |[< >] -> str ;;
-
+        
 (* Type des lexÃ¨mes *)
 type token = 
   | Tent of int
@@ -203,11 +203,8 @@ type 'a option =
 let rec next_token = parser
   | [< '  ' '|'\n'; tk = next_token >] -> tk (* Ã©limination des espaces *)
   | [< '  '0'..'9' as c; n = horner (valchiffre c) >] -> Some (Tent (n))
-  | [<''v';''r';''a';''i'>] -> Some(Tbool(true))
-  | [<''f';''a';''u';''x'>] -> Some(Tbool(false))
   | [<''&';''&'>] -> Some(Tet)
   | [<''|';''|'>] -> Some(Tou)
-  | [<''n';''o';''n'>] -> Some(Tnon)
   | [< '  '-' >] -> Some (Tmoins)
   | [< '  '+' >] -> Some(Tplus)
   | [< '  '(' >] -> Some(Touvert)
@@ -215,22 +212,31 @@ let rec next_token = parser
   | [< '  '*' >] -> Some(Tmulti)
   | [< '  '/' >] -> Some(Tdiv)
   | [< '  '=' >] -> Some(Teg)
-  | [<''i';''f'>] -> Some(Tif)
-  | [<''t';''h';''e';''n'>] -> Some(Tthen)
-  | [<''e';''l';''s';''e'>] -> Some(Telse)
-  | [<''s';''o';''i';''t'>] -> Some(Tlet)
-  | [<''d';''a';''n';''s'>] -> Some(Tin)
-  | [< id = parse_string "">] -> Some(Tident(id))
+  | [< id = parse_string "">] ->
+     (match id with
+     |"vrai" -> Some(Tbool(true))
+     |"faux" -> Some(Tbool(false))
+     |"non" -> Some(Tnon)
+     |"if" -> Some(Tif)
+     |"then" -> Some(Tthen)
+     |"else" -> Some(Telse)
+     |"soit" -> Some(Tlet)
+     |"dans" -> Some(Tin)
+     | _ -> Some(Tident(id)))
   | [< >] -> None
 
 (* tests *)
-let s = Stream.of_string "45 - - 089"
+let s = Stream.of_string "if vrai then 2 else 3"
 let tk1 = next_token s
 let tk2 = next_token s
 let tk3 = next_token s
 let tk4 = next_token s
 let tk5 = next_token s
 let tk6 = next_token s
+let tk7 = next_token s
+let tk8 = next_token s
+let tk9 = next_token s
+let tk0 = next_token s        
 
 (* L'analyseur lexical parcourt rÃ©cursivement le flot de caractÃ¨res s
    en produisant un flot de lexÃ¨mes *)
@@ -273,7 +279,8 @@ c'est la version Ã  utiliser.
 let rec p_expr = parser
   |[<'Tif; b=p_expr; 'Tthen; x=p_expr; 'Telse; y=p_expr>] -> OpIf(IfThenElse,b,x,y)
   |[<'Tlet; 'Tident(id); 'Teg; e1=p_expr; 'Tin; e2=p_expr >] -> OpSD(SoitDans,id,e1,e2)
-  | [< t = p_conjonction; e = p_s_disjonctions t >] -> e
+  (*  |[<'Tlet; 'Tident(idf1); 'Tident(arg); 'Teg; e1=p_expr; 'Tin; 'Tident(idf2); e2=p_expr >] -> OpSD(SoitDans,arg,e2,e1) *)
+  |[< t = p_conjonction; e = p_s_disjonctions t >] -> e
 and p_s_disjonctions a = parser
   | [< ' Tou; t = p_conjonction; e = p_s_disjonctions (Op(Ou,a,t)) >] -> e
   | [< >] -> a
@@ -314,13 +321,15 @@ and p_facteur = parser
 
 let ast s = p_expr (lex (Stream.of_string s))
 
-
-let e = ast "if vrai then 5 else faux"
+let ee = ast "if vrai then 2 else 3"
+let e = ast "if vrai then vrai else faux"
 let e1 = ast "if(5=5)then(if(vrai)then(4/2)else(4*2))else(50)"
 let e2 = ast "soit x = 5 dans x + (soit x = 2 dans x * (soit x = 3 dans x)) - 3"
 let e2l = ast "soit y = 2 dans (soit x = y + 5 dans (soit y = 1 dans x))"
 let e3 = ast "soit x = (if (vrai) then 2 else 1000) dans (soit y = 3 dans (x + y))"
-let t = eval_type e1 []
-let x = eval e1 []
+let ef0 = ast "soit f = 2 dans f + 1"       
+let ef = ast "soit z x = x / 2 dans z 4"
+let t = eval_type e3 []
+let x = eval ef0 []
 let y = print_expr e3
           
