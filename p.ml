@@ -21,7 +21,6 @@ type oper5 =
   | SoitDans
 
 type ident = string
-(*type var = ident * expr*)
   
 type expr = 
   | Int of int
@@ -33,11 +32,6 @@ type expr =
   | OpSD of oper5 * ident * expr * expr
           
 
-
-(*type res =
-  | Rint of int
-  | Rbool of bool
- *)
 type res_type =
   |Integer
   |Boolean 
@@ -181,6 +175,8 @@ type token =
   | Telse
   | Tlet
   | Tin
+  | Tfun
+  | Tfleche
   | Touvert
   | Tferme
 
@@ -200,6 +196,7 @@ type 'a option =
   | Some of 'a     (* indique la prÃ©sence de valeur *)
 *)
 
+
 let rec next_token = parser
   | [< '  ' '|'\n'; tk = next_token >] -> tk (* Ã©limination des espaces *)
   | [< '  '0'..'9' as c; n = horner (valchiffre c) >] -> Some (Tent (n))
@@ -212,6 +209,7 @@ let rec next_token = parser
   | [< '  '*' >] -> Some(Tmulti)
   | [< '  '/' >] -> Some(Tdiv)
   | [< '  '=' >] -> Some(Teg)
+  | [< '  '~';''>'>] -> Some(Tfleche)
   | [< id = parse_string "">] ->
      (match id with
      |"vrai" -> Some(Tbool(true))
@@ -222,6 +220,7 @@ let rec next_token = parser
      |"else" -> Some(Telse)
      |"soit" -> Some(Tlet)
      |"dans" -> Some(Tin)
+     |"fun" -> Some(Tfun)
      | _ -> Some(Tident(id)))
   | [< >] -> None
 
@@ -278,9 +277,13 @@ c'est la version Ã  utiliser.
 
 let rec p_expr = parser
   |[<'Tif; b=p_expr; 'Tthen; x=p_expr; 'Telse; y=p_expr>] -> OpIf(IfThenElse,b,x,y)
-  |[<'Tlet; 'Tident(id); 'Teg; e1=p_expr; 'Tin; e2=p_expr >] -> OpSD(SoitDans,id,e1,e2)
-  (*  |[<'Tlet; 'Tident(idf1); 'Tident(arg); 'Teg; e1=p_expr; 'Tin; 'Tident(idf2); e2=p_expr >] -> OpSD(SoitDans,arg,e2,e1) *)
+  |[<'Tlet; e = p_fonction >] -> e
   |[< t = p_conjonction; e = p_s_disjonctions t >] -> e
+                                                    
+and p_fonction = parser
+  |[< 'Tident(id); 'Teg; e1=p_expr; 'Tin; e2=p_expr >] -> OpSD(SoitDans,id,e1,e2)
+  |[< 'Tfun; 'Tident(arg);'Tfleche;e1 = p_expr; 'Tin; 'Tfun;e2 = p_expr >] -> OpSD(SoitDans,arg,e2,e1)
+                                                                        
 and p_s_disjonctions a = parser
   | [< ' Tou; t = p_conjonction; e = p_s_disjonctions (Op(Ou,a,t)) >] -> e
   | [< >] -> a
@@ -328,8 +331,8 @@ let e2 = ast "soit x = 5 dans x + (soit x = 2 dans x * (soit x = 3 dans x)) - 3"
 let e2l = ast "soit y = 2 dans (soit x = y + 5 dans (soit y = 1 dans x))"
 let e3 = ast "soit x = (if (vrai) then 2 else 1000) dans (soit y = 3 dans (x + y))"
 let ef0 = ast "soit f = 2 dans f + 1"       
-let ef = ast "soit z x = x / 2 dans z 4"
+let ef = ast "soit fun x ~> (soit fun y ~> x+y dans fun 4) dans fun 3"
 let t = eval_type e3 []
-let x = eval ef0 []
-let y = print_expr e3
+let x = eval ef []
+let y = print_expr ef
           
